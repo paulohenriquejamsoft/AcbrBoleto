@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ACBrBoleto.Bancos/ACBrBoleto.Bancos.csproj" />
+    <Project Path="src/ACBrBoleto.Core/ACBrBoleto.Core.csproj" />
+    <Project Path="src/ACBrBoleto.Email/ACBrBoleto.Email.csproj" />
+    <Project Path="src/ACBrBoleto.Pdf/ACBrBoleto.Pdf.csproj" />
+    <Project Path="src/ACBrBoleto.WebServices/ACBrBoleto.WebServices.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ACBrBoleto.Bancos.Tests/ACBrBoleto.Bancos.Tests.csproj" />
+    <Project Path="tests/ACBrBoleto.Core.Tests/ACBrBoleto.Core.Tests.csproj" />
+  </Folder>
+</Solution>

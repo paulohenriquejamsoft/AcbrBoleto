@@ -1,0 +1,95 @@
+using System.Text.Json.Nodes;
+using ACBrBoleto.Core.Enums;
+using ACBrBoleto.Core.Models;
+using ACBrBoleto.WebServices.Base;
+using Microsoft.Extensions.Caching.Memory;
+
+namespace ACBrBoleto.WebServices.Banrisul;
+
+/// <summary>
+/// WebService Banrisul — Cobrança API v1 (REST/JSON).
+/// Produção:   https://api.banrisul.com.br/cobranca/v1
+/// Homolog.:   https://apidev.banrisul.com.br/cobranca/v1
+/// OAuth Prod: https://api.banrisul.com.br/auth/oauth/v2/token
+/// OAuth Hom:  https://apidev.banrisul.com.br/auth/oauth/v2/token
+/// Corresponde a TBoletoW_Banrisul no Delphi.
+/// </summary>
+public class BanrisulWebService : BoletoWebServiceBase
+{
+    protected override string UrlProducao    => "https://api.banrisul.com.br/cobranca/v1";
+    protected override string UrlHomologacao => "https://apidev.banrisul.com.br/cobranca/v1";
+    protected override string UrlOAuthProducao    => "https://api.banrisul.com.br/auth/oauth/v2/token";
+    protected override string UrlOAuthHomologacao => "https://apidev.banrisul.com.br/auth/oauth/v2/token";
+
+    public BanrisulWebService(IHttpClientFactory httpClientFactory, IMemoryCache cache)
+        : base(httpClientFactory, cache) { }
+
+    public override string Nome => "Banrisul";
+    public override TipoCobranca TipoCobranca => TipoCobranca.Banrisul;
+
+    public override async Task<RetornoWebService> IncluirAsync(
+        Boleto boleto, Beneficiario beneficiario, WebServiceConfig config, CancellationToken ct = default)
+    {
+        var token = await GetTokenAsync(config, ct);
+        var url   = GetBaseUrl(config.Ambiente) + "/boleto";
+        var body  = MontarCorpoIncluir(boleto, beneficiario);
+
+        var retorno = await SendAsync(HttpMethod.Post, url, body.ToJsonString(), HeadersBearer(token), ct);
+        ParseResposta(retorno);
+        return retorno;
+    }
+
+    public override async Task<RetornoWebService> ConsultarDetalheAsync(
+        Boleto boleto, Beneficiario beneficiario, WebServiceConfig config, CancellationToken ct = default)
+    {
+        var token = await GetTokenAsync(config, ct);
+        var url   = GetBaseUrl(config.Ambiente) + $"/boleto/{boleto.NossoNumero}";
+
+        return await SendAsync(HttpMethod.Get, url, null, HeadersBearer(token), ct);
+    }
+
+    public override async Task<RetornoWebService> BaixarAsync(
+        Boleto boleto, Beneficiario beneficiario, WebServiceConfig config, CancellationToken ct = default)
+    {
+        var token = await GetTokenAsync(config, ct);
+        var url   = GetBaseUrl(config.Ambiente) + $"/boleto/{boleto.NossoNumero}/baixa";
+
+        return await SendAsync(HttpMethod.Post, url, "{}", HeadersBearer(token), ct);
+    }
+
+    private static JsonObject MontarCorpoIncluir(Boleto boleto, Beneficiario beneficiario)
+    {
+        return new JsonObject
+        {
+            ["codBeneficiario"]  = beneficiario.CodigoCedente,
+            ["seuNumero"]        = Truncar(boleto.NumeroDocumento, 10),
+            ["dataVencimento"]   = boleto.Vencimento.ToString("yyyy-MM-dd"),
+            ["valorNominal"]     = boleto.ValorDocumento,
+            ["pagador"] = new JsonObject
+            {
+                ["tipoDocumento"] = boleto.Pagador.Pessoa == TipoPessoa.Fisica ? "CPF" : "CNPJ",
+                ["numeroDocumento"] = SomenteNumeros(boleto.Pagador.CnpjCpf),
+                ["nome"]          = Truncar(boleto.Pagador.Nome, 40),
+                ["logradouro"]    = Truncar(boleto.Pagador.Logradouro, 40),
+                ["numero"]        = Truncar(boleto.Pagador.Numero, 10),
+                ["bairro"]        = Truncar(boleto.Pagador.Bairro, 30),
+                ["cidade"]        = Truncar(boleto.Pagador.Cidade, 20),
+                ["uf"]            = boleto.Pagador.UF,
+                ["cep"]           = SomenteNumeros(boleto.Pagador.CEP)
+            }
+        };
+    }
+
+    private static void ParseResposta(RetornoWebService retorno)
+    {
+        if (string.IsNullOrEmpty(retorno.RetornoWS)) return;
+        try
+        {
+            var json = JsonNode.Parse(retorno.RetornoWS);
+            retorno.NossoNumero    = json?["nossoNumero"]?.GetValue<string>() ?? "";
+            retorno.LinhaDigitavel = json?["linhaDigitavel"]?.GetValue<string>() ?? "";
+            retorno.CodigoBarras   = json?["codigoBarras"]?.GetValue<string>() ?? "";
+        }
+        catch { /* deixa retorno como está */ }
+    }
+}
